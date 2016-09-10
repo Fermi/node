@@ -31,6 +31,8 @@ import gyp.xcode_emulation
 from gyp.common import GetEnvironFallback
 from gyp.common import GypError
 
+import hashlib
+
 generator_default_variables = {
   'EXECUTABLE_PREFIX': '',
   'EXECUTABLE_SUFFIX': '',
@@ -1743,7 +1745,10 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
       #   actual command.
       # - The intermediate recipe will 'touch' the intermediate file.
       # - The multi-output rule will have an do-nothing recipe.
-      intermediate = "%s.intermediate" % (command if command else self.target)
+
+      # Hash the target name to avoid generating overlong filenames.
+      cmddigest = hashlib.sha1(command if command else self.target).hexdigest()
+      intermediate = "%s.intermediate" % cmddigest
       self.WriteLn('%s: %s' % (' '.join(outputs), intermediate))
       self.WriteLn('\t%s' % '@:');
       self.WriteLn('%s: %s' % ('.INTERMEDIATE', intermediate))
@@ -2058,10 +2063,10 @@ def GenerateOutput(target_list, target_dicts, data, params):
     'AR.target':   GetEnvironFallback(('AR_target', 'AR'), '$(AR)'),
     'CXX.target':  GetEnvironFallback(('CXX_target', 'CXX'), '$(CXX)'),
     'LINK.target': GetEnvironFallback(('LINK_target', 'LINK'), '$(LINK)'),
-    'CC.host':     GetEnvironFallback(('CC_host',), 'gcc'),
-    'AR.host':     GetEnvironFallback(('AR_host',), 'ar'),
-    'CXX.host':    GetEnvironFallback(('CXX_host',), 'g++'),
-    'LINK.host':   GetEnvironFallback(('LINK_host',), '$(CXX.host)'),
+    'CC.host':     GetEnvironFallback(('CC_host', 'CC'), 'gcc'),
+    'AR.host':     GetEnvironFallback(('AR_host', 'AR'), 'ar'),
+    'CXX.host':    GetEnvironFallback(('CXX_host', 'CXX'), 'g++'),
+    'LINK.host':   GetEnvironFallback(('LINK_host', 'LINK'), '$(CXX.host)'),
   })
 
   build_file, _, _ = gyp.common.ParseQualifiedTarget(target_list[0])

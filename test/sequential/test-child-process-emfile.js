@@ -5,7 +5,7 @@ const child_process = require('child_process');
 const fs = require('fs');
 
 if (common.isWindows) {
-  console.log('1..0 # Skipped: no RLIMIT_NOFILE on Windows');
+  common.skip('no RLIMIT_NOFILE on Windows');
   return;
 }
 
@@ -44,8 +44,7 @@ proc.on('error', common.mustCall(function(err) {
 }));
 
 proc.on('exit', function() {
-  const msg = '"exit" should not be emitted (the process never spawned!)';
-  assert.fail(null, null, msg);
+  common.fail('"exit" should not be emitted (the process never spawned!)');
 });
 
 // close one fd for LSan

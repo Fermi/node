@@ -11,8 +11,8 @@ namespace node {
 using v8::Context;
 using v8::Local;
 using v8::Object;
-using v8::Value;
 using v8::ReadOnly;
+using v8::Value;
 
 // The config binding is used to provide an internal view of compile or runtime
 // config options that are required internally by lib/*.js code. This is an
@@ -30,8 +30,8 @@ void InitConfig(Local<Object> target,
                 Local<Value> unused,
                 Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
-
 #ifdef NODE_HAVE_I18N_SUPPORT
+
   READONLY_BOOLEAN_PROPERTY("hasIntl");
 
 #ifdef NODE_HAVE_SMALL_ICU
@@ -41,7 +41,10 @@ void InitConfig(Local<Object> target,
   if (flag_icu_data_dir)
     READONLY_BOOLEAN_PROPERTY("usingICUDataDir");
 #endif  // NODE_HAVE_I18N_SUPPORT
-}
+
+  if (config_preserve_symlinks)
+    READONLY_BOOLEAN_PROPERTY("preserveSymlinks");
+}  // InitConfig
 
 }  // namespace node
 

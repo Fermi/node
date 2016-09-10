@@ -4,6 +4,8 @@ const assert = require('assert');
 const http = require('http');
 const Agent = require('_http_agent').Agent;
 
+let name;
+
 const agent = new Agent({
   keepAlive: true,
   keepAliveMsecs: 1000,
@@ -28,13 +30,11 @@ const server = http.createServer(function(req, res) {
 function get(path, callback) {
   return http.get({
     host: 'localhost',
-    port: common.PORT,
+    port: server.address().port,
     agent: agent,
     path: path
   }, callback);
 }
-
-const name = 'localhost:' + common.PORT + ':';
 
 function checkDataAndSockets(body) {
   assert.equal(body.toString(), 'hello world');
@@ -62,7 +62,7 @@ function second() {
 function remoteClose() {
   // mock remote server close the socket
   get('/remote_close', function(res) {
-    assert.deepEqual(res.statusCode, 200);
+    assert.deepStrictEqual(res.statusCode, 200);
     res.on('data', checkDataAndSockets);
     res.on('end', function() {
       assert.equal(agent.sockets[name].length, 1);
@@ -74,7 +74,7 @@ function remoteClose() {
         setTimeout(function() {
           assert.equal(agent.sockets[name], undefined);
           assert.equal(agent.freeSockets[name], undefined,
-            'freeSockets is not empty');
+                       'freeSockets is not empty');
           remoteError();
         }, common.platformTimeout(200));
       });
@@ -106,7 +106,8 @@ function done() {
   process.exit(0);
 }
 
-server.listen(common.PORT, function() {
+server.listen(0, function() {
+  name = `localhost:${server.address().port}:`;
   // request first, and keep alive
   get('/first', function(res) {
     assert.equal(res.statusCode, 200);

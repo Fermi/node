@@ -1,9 +1,10 @@
 /* eslint-disable max-len */
 'use strict';
 require('../common');
-var assert = require('assert');
+const assert = require('assert');
+const inspect = require('util').inspect;
 
-var url = require('url');
+const url = require('url');
 
 // URLs to parse, and expected data
 // { url : parsed }
@@ -822,7 +823,7 @@ var parseTests = {
     query: '@c'
   },
 
-  'http://a\r" \t\n<\'b:b@c\r\nd/e?f':{
+  'http://a\r" \t\n<\'b:b@c\r\nd/e?f': {
     protocol: 'http:',
     slashes: true,
     auth: 'a\r" \t\n<\'b:b',
@@ -873,7 +874,7 @@ var parseTests = {
 for (const u in parseTests) {
   let actual = url.parse(u);
   const spaced = url.parse(`     \t  ${u}\n\t`);
-  let expected = parseTests[u];
+  let expected = Object.assign(new url.Url(), parseTests[u]);
 
   Object.keys(actual).forEach(function(i) {
     if (expected[i] === undefined && actual[i] === null) {
@@ -881,8 +882,16 @@ for (const u in parseTests) {
     }
   });
 
-  assert.deepEqual(actual, expected);
-  assert.deepEqual(spaced, expected);
+  assert.deepStrictEqual(
+    actual,
+    expected,
+    `expected ${inspect(expected)}, got ${inspect(actual)}`
+  );
+  assert.deepStrictEqual(
+    spaced,
+    expected,
+    `expected ${inspect(expected)}, got ${inspect(spaced)}`
+  );
 
   expected = parseTests[u].href;
   actual = url.format(parseTests[u]);
@@ -891,14 +900,29 @@ for (const u in parseTests) {
                'format(' + u + ') == ' + u + '\nactual:' + actual);
 }
 
+function createWithNoPrototype(properties = []) {
+  const noProto = Object.create(null);
+  properties.forEach((property) => {
+    noProto[property.key] = property.value;
+  });
+  return noProto;
+}
+
+function check(actual, expected) {
+  assert.notStrictEqual(Object.getPrototypeOf(actual), Object.prototype);
+  assert.deepStrictEqual(Object.keys(actual).sort(),
+                         Object.keys(expected).sort());
+  Object.keys(expected).forEach(function(key) {
+    assert.deepStrictEqual(actual[key], expected[key]);
+  });
+}
+
 var parseTestsWithQueryString = {
   '/foo/bar?baz=quux#frag': {
     href: '/foo/bar?baz=quux#frag',
     hash: '#frag',
     search: '?baz=quux',
-    query: {
-      baz: 'quux'
-    },
+    query: createWithNoPrototype([{key: 'baz', value: 'quux'}]),
     pathname: '/foo/bar',
     path: '/foo/bar?baz=quux'
   },
@@ -908,7 +932,7 @@ var parseTestsWithQueryString = {
     slashes: true,
     host: 'example.com',
     hostname: 'example.com',
-    query: {},
+    query: createWithNoPrototype(),
     search: '',
     pathname: '/',
     path: '/'
@@ -916,13 +940,13 @@ var parseTestsWithQueryString = {
   '/example': {
     protocol: null,
     slashes: null,
-    auth: null,
+    auth: undefined,
     host: null,
     port: null,
     hostname: null,
     hash: null,
     search: '',
-    query: {},
+    query: createWithNoPrototype(),
     pathname: '/example',
     path: '/example',
     href: '/example'
@@ -930,13 +954,13 @@ var parseTestsWithQueryString = {
   '/example?query=value': {
     protocol: null,
     slashes: null,
-    auth: null,
+    auth: undefined,
     host: null,
     port: null,
     hostname: null,
     hash: null,
     search: '?query=value',
-    query: { query: 'value' },
+    query: createWithNoPrototype([{ key: 'query', value: 'value' }]),
     pathname: '/example',
     path: '/example?query=value',
     href: '/example?query=value'
@@ -944,16 +968,22 @@ var parseTestsWithQueryString = {
 };
 for (const u in parseTestsWithQueryString) {
   const actual = url.parse(u, true);
-  const expected = parseTestsWithQueryString[u];
+  const expected = Object.assign(new url.Url(), parseTestsWithQueryString[u]);
   for (const i in actual) {
     if (actual[i] === null && expected[i] === undefined) {
       expected[i] = null;
     }
   }
 
-  assert.notStrictEqual(Object.getPrototypeOf(actual.query), Object.prototype);
-
-  assert.deepEqual(actual, expected);
+  const properties = Object.keys(actual).sort();
+  assert.deepStrictEqual(properties, Object.keys(expected).sort());
+  properties.forEach((property) => {
+    if (property === 'query') {
+      check(actual[property], expected[property]);
+    } else {
+      assert.deepStrictEqual(actual[property], expected[property]);
+    }
+  });
 }
 
 // some extra formatting tests, just to verify
@@ -1108,7 +1138,7 @@ var formatTests = {
 
   // `#`,`?` in path
   '/path/to/%%23%3F+=&.txt?foo=theA1#bar': {
-    href : '/path/to/%%23%3F+=&.txt?foo=theA1#bar',
+    href: '/path/to/%%23%3F+=&.txt?foo=theA1#bar',
     pathname: '/path/to/%#?+=&.txt',
     query: {
       foo: 'theA1'
@@ -1118,7 +1148,7 @@ var formatTests = {
 
   // `#`,`?` in path + `#` in query
   '/path/to/%%23%3F+=&.txt?foo=the%231#bar': {
-    href : '/path/to/%%23%3F+=&.txt?foo=the%231#bar',
+    href: '/path/to/%%23%3F+=&.txt?foo=the%231#bar',
     pathname: '/path/to/%#?+=&.txt',
     query: {
       foo: 'the#1'
@@ -1144,6 +1174,27 @@ var formatTests = {
     hash: '#frag',
     search: '?abc=the#1?&foo=bar',
     pathname: '/fooA100%mBr',
+  },
+
+  // multiple `#` in search
+  'http://example.com/?foo=bar%231%232%233&abc=%234%23%235#frag': {
+    href: 'http://example.com/?foo=bar%231%232%233&abc=%234%23%235#frag',
+    protocol: 'http:',
+    slashes: true,
+    host: 'example.com',
+    hostname: 'example.com',
+    hash: '#frag',
+    search: '?foo=bar#1#2#3&abc=#4##5',
+    query: {},
+    pathname: '/'
+  },
+
+  // https://github.com/nodejs/node/issues/3361
+  'file:///home/user': {
+    href: 'file:///home/user',
+    protocol: 'file',
+    pathname: '/home/user',
+    path: '/home/user'
   }
 };
 for (const u in formatTests) {
@@ -1151,13 +1202,13 @@ for (const u in formatTests) {
   delete formatTests[u].href;
   const actual = url.format(u);
   const actualObj = url.format(formatTests[u]);
-  assert.equal(actual, expect,
-               'wonky format(' + u + ') == ' + expect +
-               '\nactual:' + actual);
-  assert.equal(actualObj, expect,
-               'wonky format(' + JSON.stringify(formatTests[u]) +
-               ') == ' + expect +
-               '\nactual: ' + actualObj);
+  assert.strictEqual(actual, expect,
+                     'wonky format(' + u + ') == ' + expect +
+                     '\nactual:' + actual);
+  assert.strictEqual(actualObj, expect,
+                     'wonky format(' + JSON.stringify(formatTests[u]) +
+                     ') == ' + expect +
+                     '\nactual: ' + actualObj);
 }
 
 /*
@@ -1517,11 +1568,33 @@ var relativeTests2 = [
   //changeing auth
   ['http://diff:auth@www.example.com',
    'http://asdf:qwer@www.example.com',
-   'http://diff:auth@www.example.com/']
+   'http://diff:auth@www.example.com/'],
+
+  // changing port
+  ['https://example.com:81/',
+   'https://example.com:82/',
+   'https://example.com:81/'],
+
+  // https://github.com/nodejs/node/issues/1435
+  ['https://another.host.com/',
+   'https://user:password@example.org/',
+   'https://another.host.com/'],
+  ['//another.host.com/',
+   'https://user:password@example.org/',
+   'https://another.host.com/'],
+  ['http://another.host.com/',
+   'https://user:password@example.org/',
+   'http://another.host.com/'],
+  ['mailto:another.host.com',
+   'mailto:user@example.org',
+   'mailto:another.host.com'],
+  ['https://example.com/foo',
+   'https://user:password@example.com',
+   'https://user:password@example.com/foo'],
 ];
 relativeTests2.forEach(function(relativeTest) {
   const a = url.resolve(relativeTest[1], relativeTest[0]);
-  const e = relativeTest[2];
+  const e = url.format(relativeTest[2]);
   assert.equal(a, e,
                'resolve(' + [relativeTest[1], relativeTest[0]] + ') == ' + e +
                '\n  actual=' + a);
@@ -1536,7 +1609,7 @@ relativeTests.forEach(function(relativeTest) {
   var expected = url.parse(relativeTest[2]);
 
 
-  assert.deepEqual(actual, expected);
+  assert.deepStrictEqual(actual, expected);
 
   expected = relativeTest[2];
   actual = url.format(actual);
@@ -1563,9 +1636,13 @@ relativeTests2.forEach(function(relativeTest) {
   var actual = url.resolveObject(url.parse(relativeTest[1]), relativeTest[0]);
   var expected = url.parse(relativeTest[2]);
 
-  assert.deepEqual(actual, expected);
+  assert.deepStrictEqual(
+    actual,
+    expected,
+    `expected ${inspect(expected)} but got ${inspect(actual)}`
+  );
 
-  expected = relativeTest[2];
+  expected = url.format(relativeTest[2]);
   actual = url.format(actual);
 
   assert.equal(actual, expected,

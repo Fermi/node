@@ -71,7 +71,7 @@ var arch = os.arch();
 console.log('arch = ', arch);
 assert.ok(arch.length > 0);
 
-if (process.platform != 'sunos') {
+if (!common.isSunOS) {
   // not implemeneted yet
   assert.ok(os.loadavg().length > 0);
   assert.ok(os.freemem() > 0);
@@ -89,7 +89,7 @@ switch (platform) {
       const expected = [{ address: '127.0.0.1', netmask: '255.0.0.0',
                         mac: '00:00:00:00:00:00', family: 'IPv4',
                         internal: true }];
-      assert.deepEqual(actual, expected);
+      assert.deepStrictEqual(actual, expected);
       break;
     }
   case 'win32':
@@ -99,7 +99,7 @@ switch (platform) {
       const expected = [{ address: '127.0.0.1', netmask: '255.0.0.0',
                         mac: '00:00:00:00:00:00', family: 'IPv4',
                         internal: true }];
-      assert.deepEqual(actual, expected);
+      assert.deepStrictEqual(actual, expected);
       break;
     }
 }

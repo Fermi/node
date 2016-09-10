@@ -70,7 +70,7 @@ const sameHistoryFilePaths = '\nThe old repl history file has the same name ' +
                              path.join(common.tmpDir, '.node_repl_history') +
                              ' and is empty.\nUsing it as is.\n';
 // File paths
-const fixtures = path.join(common.testDir, 'fixtures');
+const fixtures = common.fixturesDir;
 const historyFixturePath = path.join(fixtures, '.node_repl_history');
 const historyPath = path.join(common.tmpDir, '.fixture_copy_repl_history');
 const historyPathFail = path.join(common.tmpDir, '.node_repl\u0000_history');
@@ -261,6 +261,9 @@ function runTest(assertCleaned) {
       console.error(`Failed test # ${numtests - tests.length}`);
       throw err;
     }
+
+    // The REPL registers 'module' and 'require' globals
+    common.allowGlobals(repl.context.module, repl.context.require);
 
     repl.once('close', () => {
       if (repl._flushing) {

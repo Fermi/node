@@ -32,6 +32,7 @@
 #include "src/v8.h"
 
 #include "include/v8-profiler.h"
+#include "src/collector.h"
 #include "src/debug/debug.h"
 #include "src/hashmap.h"
 #include "src/profiler/allocation-tracker.h"
@@ -366,7 +367,9 @@ TEST(HeapSnapshotCodeObjects) {
     }
   }
   CHECK(compiled_references_x);
-  CHECK(!lazy_references_x);
+  if (i::FLAG_lazy && !(i::FLAG_ignition && i::FLAG_ignition_eager)) {
+    CHECK(!lazy_references_x);
+  }
 }
 
 
@@ -2872,7 +2875,6 @@ static const v8::AllocationProfile::Node* FindAllocationProfileNode(
   return node;
 }
 
-
 TEST(SamplingHeapProfiler) {
   v8::HandleScope scope(v8::Isolate::GetCurrent());
   LocalContext env;
@@ -2985,6 +2987,23 @@ TEST(SamplingHeapProfiler) {
 
     heap_profiler->StopSamplingHeapProfiler();
   }
+
+  // A test case with scripts unloaded before profile gathered
+  {
+    heap_profiler->StartSamplingHeapProfiler(64);
+    CompileRun(
+        "for (var i = 0; i < 1024; i++) {\n"
+        "  eval(\"new Array(100)\");\n"
+        "}\n");
+
+    CcTest::heap()->CollectAllGarbage();
+
+    v8::base::SmartPointer<v8::AllocationProfile> profile(
+        heap_profiler->GetAllocationProfile());
+    CHECK(!profile.is_empty());
+
+    heap_profiler->StopSamplingHeapProfiler();
+  }
 }
 
 
@@ -3007,6 +3026,31 @@ TEST(SamplingHeapProfilerApiAllocation) {
   auto node = FindAllocationProfileNode(
       *profile, Vector<const char*>(names, arraysize(names)));
   CHECK(node);
+
+  heap_profiler->StopSamplingHeapProfiler();
+}
+
+TEST(SamplingHeapProfilerLeftTrimming) {
+  v8::HandleScope scope(v8::Isolate::GetCurrent());
+  LocalContext env;
+  v8::HeapProfiler* heap_profiler = env->GetIsolate()->GetHeapProfiler();
+
+  // Suppress randomness to avoid flakiness in tests.
+  v8::internal::FLAG_sampling_heap_profiler_suppress_randomness = true;
+
+  heap_profiler->StartSamplingHeapProfiler(64);
+
+  CompileRun(
+      "for (var j = 0; j < 500; ++j) {\n"
+      "  var a = [];\n"
+      "  for (var i = 0; i < 5; ++i)\n"
+      "      a[i] = i;\n"
+      "  for (var i = 0; i < 3; ++i)\n"
+      "      a.shift();\n"
+      "}\n");
+
+  CcTest::heap()->CollectGarbage(v8::internal::NEW_SPACE);
+  // Should not crash.
 
   heap_profiler->StopSamplingHeapProfiler();
 }
