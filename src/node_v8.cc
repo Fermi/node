@@ -10,7 +10,6 @@ namespace node {
 using v8::Array;
 using v8::ArrayBuffer;
 using v8::Context;
-using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::HeapSpaceStatistics;
 using v8::HeapStatistics;
@@ -20,7 +19,6 @@ using v8::NewStringType;
 using v8::Object;
 using v8::String;
 using v8::Uint32;
-using v8::Uint32Array;
 using v8::V8;
 using v8::Value;
 

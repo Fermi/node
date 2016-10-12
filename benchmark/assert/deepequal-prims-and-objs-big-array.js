@@ -34,6 +34,7 @@ function main(conf) {
 
   bench.start();
   for (x = 0; x < n; x++) {
+    // eslint-disable-next-line no-restricted-properties
     assert.deepEqual(primArray, primArrayCompare);
   }
   bench.end(n);

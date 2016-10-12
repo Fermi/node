@@ -26,6 +26,7 @@ function main(conf) {
   bench.start();
 
   for (x = 0; x < n; x++) {
+    // eslint-disable-next-line no-restricted-properties
     assert.deepEqual(new Array([prim]), new Array([prim]));
   }
 

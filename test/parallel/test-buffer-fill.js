@@ -73,6 +73,27 @@ testBufs('a\u0234b\u0235c\u0236', 4, 1, 'binary');
 testBufs('a\u0234b\u0235c\u0236', 12, 1, 'binary');
 
 
+// LATIN1
+testBufs('abc', 'latin1');
+testBufs('\u0222aa', 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 'latin1');
+testBufs('abc', 4, 'latin1');
+testBufs('abc', 5, 'latin1');
+testBufs('abc', SIZE, 'latin1');
+testBufs('\u0222aa', 2, 'latin1');
+testBufs('\u0222aa', 8, 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 4, 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 12, 'latin1');
+testBufs('abc', 4, -1, 'latin1');
+testBufs('abc', 4, 1, 'latin1');
+testBufs('abc', 5, 1, 'latin1');
+testBufs('\u0222aa', 2, -1, 'latin1');
+testBufs('\u0222aa', 8, 1, 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 4, -1, 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 4, 1, 'latin1');
+testBufs('a\u0234b\u0235c\u0236', 12, 1, 'latin1');
+
+
 // UCS2
 testBufs('abc', 'ucs2');
 testBufs('\u0222aa', 'ucs2');
@@ -140,18 +161,25 @@ testBufs('Yci0Ysi1Y8i2', 12, 1, 'ucs2');
 
 
 // Buffer
+function deepStrictEqualValues(buf, arr) {
+  for (const [index, value] of buf.entries()) {
+    assert.deepStrictEqual(value, arr[index]);
+  }
+}
+
+
 const buf2Fill = Buffer.allocUnsafe(1).fill(2);
-assert.deepEqual(genBuffer(4, [buf2Fill]), [2, 2, 2, 2]);
-assert.deepEqual(genBuffer(4, [buf2Fill, 1]), [0, 2, 2, 2]);
-assert.deepEqual(genBuffer(4, [buf2Fill, 1, 3]), [0, 2, 2, 0]);
-assert.deepEqual(genBuffer(4, [buf2Fill, 1, 1]), [0, 0, 0, 0]);
-assert.deepEqual(genBuffer(4, [buf2Fill, 1, -1]), [0, 0, 0, 0]);
+deepStrictEqualValues(genBuffer(4, [buf2Fill]), [2, 2, 2, 2]);
+deepStrictEqualValues(genBuffer(4, [buf2Fill, 1]), [0, 2, 2, 2]);
+deepStrictEqualValues(genBuffer(4, [buf2Fill, 1, 3]), [0, 2, 2, 0]);
+deepStrictEqualValues(genBuffer(4, [buf2Fill, 1, 1]), [0, 0, 0, 0]);
+deepStrictEqualValues(genBuffer(4, [buf2Fill, 1, -1]), [0, 0, 0, 0]);
 const hexBufFill = Buffer.allocUnsafe(2).fill(0).fill('0102', 'hex');
-assert.deepEqual(genBuffer(4, [hexBufFill]), [1, 2, 1, 2]);
-assert.deepEqual(genBuffer(4, [hexBufFill, 1]), [0, 1, 2, 1]);
-assert.deepEqual(genBuffer(4, [hexBufFill, 1, 3]), [0, 1, 2, 0]);
-assert.deepEqual(genBuffer(4, [hexBufFill, 1, 1]), [0, 0, 0, 0]);
-assert.deepEqual(genBuffer(4, [hexBufFill, 1, -1]), [0, 0, 0, 0]);
+deepStrictEqualValues(genBuffer(4, [hexBufFill]), [1, 2, 1, 2]);
+deepStrictEqualValues(genBuffer(4, [hexBufFill, 1]), [0, 1, 2, 1]);
+deepStrictEqualValues(genBuffer(4, [hexBufFill, 1, 3]), [0, 1, 2, 0]);
+deepStrictEqualValues(genBuffer(4, [hexBufFill, 1, 1]), [0, 0, 0, 0]);
+deepStrictEqualValues(genBuffer(4, [hexBufFill, 1, -1]), [0, 0, 0, 0]);
 
 
 // Check exceptions
@@ -238,4 +266,51 @@ function testBufs(string, offset, length, encoding) {
   // Swap bytes on BE archs for ucs2 encoding.
   assert.deepStrictEqual(buf1.fill.apply(buf1, arguments),
                          writeToFill.apply(null, arguments));
+}
+
+// Make sure these throw.
+assert.throws(() => Buffer.allocUnsafe(8).fill('a', -1));
+assert.throws(() => Buffer.allocUnsafe(8).fill('a', 0, 9));
+
+// Make sure this doesn't hang indefinitely.
+Buffer.allocUnsafe(8).fill('');
+Buffer.alloc(8, '');
+
+{
+  const buf = Buffer.alloc(64, 10);
+  for (let i = 0; i < buf.length; i++)
+    assert.strictEqual(buf[i], 10);
+
+  buf.fill(11, 0, buf.length >> 1);
+  for (let i = 0; i < buf.length >> 1; i++)
+    assert.strictEqual(buf[i], 11);
+  for (let i = (buf.length >> 1) + 1; i < buf.length; i++)
+    assert.strictEqual(buf[i], 10);
+
+  buf.fill('h');
+  for (let i = 0; i < buf.length; i++)
+    assert.strictEqual('h'.charCodeAt(0), buf[i]);
+
+  buf.fill(0);
+  for (let i = 0; i < buf.length; i++)
+    assert.strictEqual(0, buf[i]);
+
+  buf.fill(null);
+  for (let i = 0; i < buf.length; i++)
+    assert.strictEqual(0, buf[i]);
+
+  buf.fill(1, 16, 32);
+  for (let i = 0; i < 16; i++)
+    assert.strictEqual(0, buf[i]);
+  for (let i = 16; i < 32; i++)
+    assert.strictEqual(1, buf[i]);
+  for (let i = 32; i < buf.length; i++)
+    assert.strictEqual(0, buf[i]);
+}
+
+{
+  const buf = Buffer.alloc(10, 'abc');
+  assert.strictEqual(buf.toString(), 'abcabcabca');
+  buf.fill('է');
+  assert.strictEqual(buf.toString(), 'էէէէէ');
 }

@@ -62,6 +62,7 @@ Writer.prototype.write = function(chunk, encoding, cb) {
 Writer.prototype.on = function() {};
 Writer.prototype.once = function() {};
 Writer.prototype.emit = function() {};
+Writer.prototype.prependListener = function() {};
 
 function server() {
   var writer = new Writer();
@@ -83,6 +84,7 @@ function server() {
         var bytes = writer.received;
         var gbits = (bytes * 8) / (1024 * 1024 * 1024);
         bench.end(gbits);
+        process.exit(0);
       }, dur * 1000);
 
       function send() {

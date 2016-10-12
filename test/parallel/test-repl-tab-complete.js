@@ -3,19 +3,13 @@
 var common = require('../common');
 var assert = require('assert');
 var repl = require('repl');
-var referenceErrors = 0;
-var expectedReferenceErrors = 0;
 
-function getDoNotCallFunction() {
-  expectedReferenceErrors += 1;
-  return function() {
-    assert(false);
-  };
+function getNoResultsFunction() {
+  return common.mustCall((err, data) => {
+    assert.ifError(err);
+    assert.deepStrictEqual(data[0], []);
+  });
 }
-
-process.on('exit', function() {
-  assert.strictEqual(referenceErrors, expectedReferenceErrors);
-});
 
 var works = [['inner.one'], 'inner.o'];
 const putIn = new common.ArrayStream();
@@ -23,13 +17,7 @@ var testMe = repl.start('', putIn);
 
 // Some errors are passed to the domain, but do not callback
 testMe._domain.on('error', function(err) {
-  // Errors come from another context, so instanceof doesn't work
-  var str = err.toString();
-
-  if (/^ReferenceError:/.test(str))
-    referenceErrors++;
-  else
-    assert(false);
+  assert.ifError(err);
 });
 
 // Tab Complete will not break in an object literal
@@ -38,16 +26,16 @@ putIn.run([
   'var inner = {',
   'one:1'
 ]);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 testMe.complete('console.lo', common.mustCall(function(error, data) {
-  assert.deepEqual(data, [['console.log'], 'console.lo']);
+  assert.deepStrictEqual(data, [['console.log'], 'console.lo']);
 }));
 
-// Tab Complete will return globaly scoped variables
+// Tab Complete will return globally scoped variables
 putIn.run(['};']);
 testMe.complete('inner.o', common.mustCall(function(error, data) {
-  assert.deepEqual(data, works);
+  assert.deepStrictEqual(data, works);
 }));
 
 putIn.run(['.clear']);
@@ -58,7 +46,7 @@ putIn.run([
   '?',
   '{one: 1} : '
 ]);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 putIn.run(['.clear']);
 
@@ -68,13 +56,13 @@ putIn.run([
   'var inner = {one:1};'
 ]);
 testMe.complete('inner.o', common.mustCall(function(error, data) {
-  assert.deepEqual(data, works);
+  assert.deepStrictEqual(data, works);
 }));
 
 // When you close the function scope tab complete will not return the
 // locally scoped variable
 putIn.run(['};']);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 putIn.run(['.clear']);
 
@@ -86,7 +74,7 @@ putIn.run([
   '};'
 ]);
 testMe.complete('inner.o', common.mustCall(function(error, data) {
-  assert.deepEqual(data, works);
+  assert.deepStrictEqual(data, works);
 }));
 
 putIn.run(['.clear']);
@@ -100,7 +88,7 @@ putIn.run([
   '};'
 ]);
 testMe.complete('inner.o', common.mustCall(function(error, data) {
-  assert.deepEqual(data, works);
+  assert.deepStrictEqual(data, works);
 }));
 
 putIn.run(['.clear']);
@@ -115,7 +103,7 @@ putIn.run([
   '};'
 ]);
 testMe.complete('inner.o', common.mustCall(function(error, data) {
-  assert.deepEqual(data, works);
+  assert.deepStrictEqual(data, works);
 }));
 
 putIn.run(['.clear']);
@@ -129,7 +117,7 @@ putIn.run([
   ' one:1',
   '};'
 ]);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 putIn.run(['.clear']);
 
@@ -142,7 +130,7 @@ putIn.run([
   ' one:1',
   '};'
 ]);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 putIn.run(['.clear']);
 
@@ -156,7 +144,7 @@ putIn.run([
   ' one:1',
   '};'
 ]);
-testMe.complete('inner.o', getDoNotCallFunction());
+testMe.complete('inner.o', getNoResultsFunction());
 
 putIn.run(['.clear']);
 
@@ -165,7 +153,7 @@ putIn.run([
   'var str = "test";'
 ]);
 testMe.complete('str.len', common.mustCall(function(error, data) {
-  assert.deepEqual(data, [['str.length'], 'str.len']);
+  assert.deepStrictEqual(data, [['str.length'], 'str.len']);
 }));
 
 putIn.run(['.clear']);
@@ -183,7 +171,7 @@ testMe.complete(' ', common.mustCall(function(error, data) {
 // tab completion should pick up the global "toString" object, and
 // any other properties up the "global" object's prototype chain
 testMe.complete('toSt', common.mustCall(function(error, data) {
-  assert.deepEqual(data, [['toString'], 'toSt']);
+  assert.deepStrictEqual(data, [['toString'], 'toSt']);
 }));
 
 // Tab complete provides built in libs for require()
@@ -215,7 +203,7 @@ putIn.run([
   'var custom = "test";'
 ]);
 testMe.complete('cus', common.mustCall(function(error, data) {
-  assert.deepEqual(data, [['custom'], 'cus']);
+  assert.deepStrictEqual(data, [['custom'], 'cus']);
 }));
 
 // Make sure tab completion doesn't crash REPL with half-baked proxy objects.
@@ -254,6 +242,131 @@ testMe.complete('obj.', common.mustCall(function(error, data) {
 putIn.run(['.clear']);
 putIn.run(['function a() {}']);
 
-testMe.complete('a().b.', common.mustCall((error, data) => {
-  assert.deepStrictEqual(data, [[], undefined]);
+testMe.complete('a().b.', getNoResultsFunction());
+
+// Works when prefixed with spaces
+putIn.run(['.clear']);
+putIn.run(['var obj = {1:"a","1a":"b",a:"b"};']);
+
+testMe.complete(' obj.', common.mustCall((error, data) => {
+  assert.strictEqual(data[0].indexOf('obj.1'), -1);
+  assert.strictEqual(data[0].indexOf('obj.1a'), -1);
+  assert.notStrictEqual(data[0].indexOf('obj.a'), -1);
+}));
+
+// Works inside assignments
+putIn.run(['.clear']);
+
+testMe.complete('var log = console.lo', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [['console.log'], 'console.lo']);
+}));
+
+// tab completion for defined commands
+putIn.run(['.clear']);
+
+testMe.complete('.b', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [['break'], 'b']);
+}));
+
+const testNonGlobal = repl.start({
+  input: putIn,
+  output: putIn,
+  useGlobal: false
+});
+
+const builtins = [['Infinity', '', 'Int16Array', 'Int32Array',
+                                 'Int8Array'], 'I'];
+
+if (typeof Intl === 'object') {
+  builtins[0].push('Intl');
+}
+testNonGlobal.complete('I', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, builtins);
+}));
+
+// To test custom completer function.
+// Sync mode.
+const customCompletions = 'aaa aa1 aa2 bbb bb1 bb2 bb3 ccc ddd eee'.split(' ');
+const testCustomCompleterSyncMode = repl.start({
+  prompt: '',
+  input: putIn,
+  output: putIn,
+  completer: function completerSyncMode(line) {
+    const hits = customCompletions.filter((c) => {
+      return c.indexOf(line) === 0;
+    });
+    // Show all completions if none found.
+    return [hits.length ? hits : customCompletions, line];
+  }
+});
+
+// On empty line should output all the custom completions
+// without complete anything.
+testCustomCompleterSyncMode.complete('', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [
+    customCompletions,
+    ''
+  ]);
+}));
+
+// On `a` should output `aaa aa1 aa2` and complete until `aa`.
+testCustomCompleterSyncMode.complete('a', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [
+    'aaa aa1 aa2'.split(' '),
+    'a'
+  ]);
+}));
+
+// To test custom completer function.
+// Async mode.
+const testCustomCompleterAsyncMode = repl.start({
+  prompt: '',
+  input: putIn,
+  output: putIn,
+  completer: function completerAsyncMode(line, callback) {
+    const hits = customCompletions.filter((c) => {
+      return c.indexOf(line) === 0;
+    });
+    // Show all completions if none found.
+    callback(null, [hits.length ? hits : customCompletions, line]);
+  }
+});
+
+// On empty line should output all the custom completions
+// without complete anything.
+testCustomCompleterAsyncMode.complete('', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [
+    customCompletions,
+    ''
+  ]);
+}));
+
+// On `a` should output `aaa aa1 aa2` and complete until `aa`.
+testCustomCompleterAsyncMode.complete('a', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [
+    'aaa aa1 aa2'.split(' '),
+    'a'
+  ]);
+}));
+
+// tab completion in editor mode
+const editorStream = new common.ArrayStream();
+const editor = repl.start({
+  stream: editorStream,
+  terminal: true,
+  useColors: false
+});
+
+editorStream.run(['.clear']);
+editorStream.run(['.editor']);
+
+editor.completer('co', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [['con'], 'co']);
+}));
+
+editorStream.run(['.clear']);
+editorStream.run(['.editor']);
+
+editor.completer('var log = console.l', common.mustCall((error, data) => {
+  assert.deepStrictEqual(data, [['console.log'], 'console.l']);
 }));

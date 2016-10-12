@@ -8,7 +8,7 @@ var path = require('path');
 assert(process.hasOwnProperty('config'));
 
 // ensure that `process.config` is an Object
-assert(Object(process.config) === process.config);
+assert.strictEqual(Object(process.config), process.config);
 
 var configPath = path.resolve(__dirname, '..', '..', 'config.gypi');
 var config = fs.readFileSync(configPath, 'utf8');
@@ -21,4 +21,4 @@ config = JSON.parse(config, function(key, value) {
   return value;
 });
 
-assert.deepEqual(config, process.config);
+assert.deepStrictEqual(config, process.config);

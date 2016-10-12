@@ -40,14 +40,12 @@ process.on('uncaughtException', function() {
   if (!exceptionHandled) {
     exceptionHandled = true;
     order.push('B');
-  }
-  else {
+  } else {
     // If we get here then the first process.nextTick got called twice
     order.push('OOPS!');
   }
 });
 
 process.on('exit', function() {
-  assert.deepEqual(['A', 'B', 'C'], order);
+  assert.deepStrictEqual(['A', 'B', 'C'], order);
 });
-
