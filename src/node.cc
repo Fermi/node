@@ -147,9 +147,9 @@ static const bool use_inspector = false;
 static bool use_debug_agent = false;
 static bool debug_wait_connect = false;
 static std::string* debug_host;  // coverity[leaked_storage]
-static int debug_port = 5858;
-static std::string* inspector_host;  // coverity[leaked_storage]
-static int inspector_port = 9229;
+static const int default_debugger_port = 5858;
+static const int default_inspector_port = 9229;
+static int debug_port = -1;
 static const int v8_default_thread_pool_size = 4;
 static int v8_thread_pool_size = v8_default_thread_pool_size;
 static bool prof_process = false;
@@ -182,6 +182,8 @@ bool trace_warnings = false;
 // Used in node_config.cc to set a constant on process.binding('config')
 // that is used by lib/module.js
 bool config_preserve_symlinks = false;
+
+bool v8_initialized = false;
 
 // process-relative uptime base, initialized at start-up
 static double prog_start_time;
@@ -979,9 +981,9 @@ Local<Value> WinapiErrnoException(Isolate* isolate,
 
 void* ArrayBufferAllocator::Allocate(size_t size) {
   if (zero_fill_field_ || zero_fill_all_buffers)
-    return node::Calloc(size, 1);
+    return node::UncheckedCalloc(size);
   else
-    return node::Malloc(size);
+    return node::UncheckedMalloc(size);
 }
 
 static bool DomainHasErrorHandler(const Environment* env,
@@ -2404,8 +2406,13 @@ void DLOpen(const FunctionCallbackInfo<Value>& args) {
     char errmsg[1024];
     snprintf(errmsg,
              sizeof(errmsg),
-             "Module version mismatch. Expected %d, got %d.",
-             NODE_MODULE_VERSION, mp->nm_version);
+             "The module '%s'"
+             "\nwas compiled against a different Node.js version using"
+             "\nNODE_MODULE_VERSION %d. This version of Node.js requires"
+             "\nNODE_MODULE_VERSION %d. Please try re-compiling or "
+             "re-installing\nthe module (for instance, using `npm rebuild` or"
+             "`npm install`).",
+             *filename, mp->nm_version, NODE_MODULE_VERSION);
 
     // NOTE: `mp` is allocated inside of the shared library's memory, calling
     // `uv_dlclose` will deallocate it
@@ -2704,7 +2711,7 @@ static void EnvSetter(Local<String> property,
     SetEnvironmentVariableW(key_ptr, reinterpret_cast<WCHAR*>(*val));
   }
 #endif
-  // Whether it worked or not, always return rval.
+  // Whether it worked or not, always return value.
   info.GetReturnValue().Set(value);
 }
 
@@ -2876,7 +2883,10 @@ static Local<Object> GetFeatures(Environment* env) {
 
 static void DebugPortGetter(Local<Name> property,
                             const PropertyCallbackInfo<Value>& info) {
-  info.GetReturnValue().Set(debug_port);
+  int port = debug_port;
+  if (port < 0)
+    port = use_inspector ? default_inspector_port : default_debugger_port;
+  info.GetReturnValue().Set(port);
 }
 
 
@@ -3473,15 +3483,12 @@ static bool ParseDebugOpt(const char* arg) {
     return true;
   }
 
-  std::string** const the_host = use_inspector ? &inspector_host : &debug_host;
-  int* const the_port = use_inspector ? &inspector_port : &debug_port;
-
   // FIXME(bnoordhuis) Move IPv6 address parsing logic to lib/net.js.
   // It seems reasonable to support [address]:port notation
   // in net.Server#listen() and net.Socket#connect().
   const size_t port_len = strlen(port);
   if (port[0] == '[' && port[port_len - 1] == ']') {
-    *the_host = new std::string(port + 1, port_len - 2);
+    debug_host = new std::string(port + 1, port_len - 2);
     return true;
   }
 
@@ -3491,13 +3498,13 @@ static bool ParseDebugOpt(const char* arg) {
     // if it's not all decimal digits, it's a host name.
     for (size_t n = 0; port[n] != '\0'; n += 1) {
       if (port[n] < '0' || port[n] > '9') {
-        *the_host = new std::string(port);
+        debug_host = new std::string(port);
         return true;
       }
     }
   } else {
     const bool skip = (colon > port && port[0] == '[' && colon[-1] == ']');
-    *the_host = new std::string(port + skip, colon - skip);
+    debug_host = new std::string(port + skip, colon - skip);
   }
 
   char* endptr;
@@ -3510,7 +3517,7 @@ static bool ParseDebugOpt(const char* arg) {
     exit(12);
   }
 
-  *the_port = static_cast<int>(result);
+  debug_port = static_cast<int>(result);
 
   return true;
 }
@@ -3770,16 +3777,17 @@ static void DispatchMessagesDebugAgentCallback(Environment* env) {
 static void StartDebug(Environment* env, const char* path, bool wait) {
   CHECK(!debugger_running);
   if (use_inspector) {
-    debugger_running = v8_platform.StartInspector(env, path, inspector_port,
-                                                  wait);
+    debugger_running = v8_platform.StartInspector(env, path,
+        debug_port >= 0 ? debug_port : default_inspector_port, wait);
   } else {
     env->debugger_agent()->set_dispatch_handler(
           DispatchMessagesDebugAgentCallback);
     const char* host = debug_host ? debug_host->c_str() : "127.0.0.1";
+    int port = debug_port >= 0 ? debug_port : default_debugger_port;
     debugger_running =
-        env->debugger_agent()->Start(host, debug_port, wait);
+        env->debugger_agent()->Start(host, port, wait);
     if (debugger_running == false) {
-      fprintf(stderr, "Starting debugger on %s:%d failed\n", host, debug_port);
+      fprintf(stderr, "Starting debugger on %s:%d failed\n", host, port);
       fflush(stderr);
       return;
     }
@@ -4489,6 +4497,7 @@ int Start(int argc, char** argv) {
 
   v8_platform.Initialize(v8_thread_pool_size);
   V8::Initialize();
+  v8_initialized = true;
 
   int exit_code = 1;
   {
@@ -4502,6 +4511,7 @@ int Start(int argc, char** argv) {
     StartNodeInstance(&instance_data);
     exit_code = instance_data.exit_code();
   }
+  v8_initialized = false;
   V8::Dispose();
 
   v8_platform.Dispose();
