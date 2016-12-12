@@ -15,8 +15,8 @@ const hash = crypto.createHmac('sha256', secret)
                    .update('I love cupcakes')
                    .digest('hex');
 console.log(hash);
-  // Prints:
-  //   c0fa1bc00531bd78ef38c628449c5102aeabd49b5dc3a2a516ea6ea959d6658e
+// Prints:
+//   c0fa1bc00531bd78ef38c628449c5102aeabd49b5dc3a2a516ea6ea959d6658e
 ```
 
 ## Determining if crypto support is unavailable
@@ -73,7 +73,7 @@ const cert = require('crypto').Certificate();
 const spkac = getSpkacSomehow();
 const challenge = cert.exportChallenge(spkac);
 console.log(challenge.toString('utf8'));
-  // Prints the challenge as a UTF8 string
+// Prints: the challenge as a UTF8 string
 ```
 
 ### certificate.exportPublicKey(spkac)
@@ -91,7 +91,7 @@ const cert = require('crypto').Certificate();
 const spkac = getSpkacSomehow();
 const publicKey = cert.exportPublicKey(spkac);
 console.log(publicKey);
-  // Prints the public key as <Buffer ...>
+// Prints: the public key as <Buffer ...>
 ```
 
 ### certificate.verifySpkac(spkac)
@@ -106,7 +106,7 @@ The `spkac` argument must be a Node.js [`Buffer`][].
 const cert = require('crypto').Certificate();
 const spkac = getSpkacSomehow();
 console.log(cert.verifySpkac(Buffer.from(spkac)));
-  // Prints true or false
+// Prints: true or false
 ```
 
 ## Class: Cipher
@@ -169,7 +169,7 @@ const cipher = crypto.createCipher('aes192', 'a password');
 var encrypted = cipher.update('some clear text data', 'utf8', 'hex');
 encrypted += cipher.final('hex');
 console.log(encrypted);
-  // Prints: ca981be48e90867604588e75d04feabb63cc007a8f8ad89b10616ed84d815504
+// Prints: ca981be48e90867604588e75d04feabb63cc007a8f8ad89b10616ed84d815504
 ```
 
 ### cipher.final([output_encoding])
@@ -304,7 +304,7 @@ var encrypted = 'ca981be48e90867604588e75d04feabb63cc007a8f8ad89b10616ed84d81550
 var decrypted = decipher.update(encrypted, 'hex', 'utf8');
 decrypted += decipher.final('utf8');
 console.log(decrypted);
-  // Prints: some clear text data
+// Prints: some clear text data
 ```
 
 ### decipher.final([output_encoding])
@@ -700,8 +700,8 @@ const hash = crypto.createHash('sha256');
 
 hash.update('some data to hash');
 console.log(hash.digest('hex'));
-  // Prints:
-  //   6a2da20943931e9834fc12cfe5bb47bbd9ae43489a30726962b576f4e3993e50
+// Prints:
+//   6a2da20943931e9834fc12cfe5bb47bbd9ae43489a30726962b576f4e3993e50
 ```
 
 ### hash.digest([encoding])
@@ -783,8 +783,8 @@ const hmac = crypto.createHmac('sha256', 'a secret');
 
 hmac.update('some data to hash');
 console.log(hmac.digest('hex'));
-  // Prints:
-  //   7fd04df92f636fd450bc841c9418e5825c17f33ad9c87c518115a45971f7f77e
+// Prints:
+//   7fd04df92f636fd450bc841c9418e5825c17f33ad9c87c518115a45971f7f77e
 ```
 
 ### hmac.digest([encoding])
@@ -839,7 +839,7 @@ sign.end();
 
 const private_key = getPrivateKeySomehow();
 console.log(sign.sign(private_key, 'hex'));
-  // Prints the calculated signature
+// Prints: the calculated signature
 ```
 
 Example: Using the [`sign.update()`][] and [`sign.sign()`][] methods:
@@ -852,7 +852,7 @@ sign.update('some data to sign');
 
 const private_key = getPrivateKeySomehow();
 console.log(sign.sign(private_key, 'hex'));
-  // Prints the calculated signature
+// Prints: the calculated signature
 ```
 
 A `Sign` instance can also be created by just passing in the digest
@@ -940,7 +940,7 @@ verify.end();
 const public_key = getPublicKeySomehow();
 const signature = getSignatureToVerify();
 console.log(verify.verify(public_key, signature));
-  // Prints true or false
+// Prints: true or false
 ```
 
 Example: Using the [`verify.update()`][] and [`verify.verify()`][] methods:
@@ -954,7 +954,7 @@ verify.update('some data to sign');
 const public_key = getPublicKeySomehow();
 const signature = getSignatureToVerify();
 console.log(verify.verify(public_key, signature));
-  // Prints true or false
+// Prints: true or false
 ```
 
 ### verifier.update(data[, input_encoding])
@@ -992,7 +992,7 @@ thrown.
 
 ## `crypto` module methods and properties
 
-## crypto.constants
+### crypto.constants
 <!-- YAML
 added: v6.3.0
 -->
@@ -1241,18 +1241,18 @@ input.on('readable', () => {
 added: v0.1.92
 -->
 
-Creates and returns a `Sign` object that uses the given `algorithm`. On
-recent OpenSSL releases, `openssl list-public-key-algorithms` will
-display the available signing algorithms. One example is `'RSA-SHA256'`.
+Creates and returns a `Sign` object that uses the given `algorithm`.
+Use [`crypto.getHashes()`][] to obtain an array of names of the available
+signing algorithms.
 
 ### crypto.createVerify(algorithm)
 <!-- YAML
 added: v0.1.92
 -->
 
-Creates and returns a `Verify` object that uses the given algorithm. On
-recent OpenSSL releases, `openssl list-public-key-algorithms` will
-display the available signing algorithms. One example is `'RSA-SHA256'`.
+Creates and returns a `Verify` object that uses the given algorithm.
+Use [`crypto.getHashes()`][] to obtain an array of names of the available
+signing algorithms.
 
 ### crypto.getCiphers()
 <!-- YAML
@@ -1320,7 +1320,8 @@ console.log(alice_secret == bob_secret);
 added: v0.9.3
 -->
 
-Returns an array with the names of the supported hash algorithms.
+Returns an array of the names of the supported hash algorithms,
+such as `RSA-SHA256`.
 
 Example:
 
@@ -1632,20 +1633,20 @@ the `crypto`, `tls`, and `https` modules and are generally specific to OpenSSL.
   <tr>
     <td><code>SSL_OP_ALL</code></td>
     <td>Applies multiple bug workarounds within OpenSSL. See
-    https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_options.html for
+    https://www.openssl.org/docs/man1.0.2/ssl/SSL_CTX_set_options.html for
     detail.</td>
   </tr>
   <tr>
     <td><code>SSL_OP_ALLOW_UNSAFE_LEGACY_RENEGOTIATION</code></td>
     <td>Allows legacy insecure renegotiation between OpenSSL and unpatched
     clients or servers. See 
-    https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_options.html.</td>
+    https://www.openssl.org/docs/man1.0.2/ssl/SSL_CTX_set_options.html.</td>
   </tr>
   <tr>
     <td><code>SSL_OP_CIPHER_SERVER_PREFERENCE</code></td>
     <td>Uses the server's preferences instead of the clients when selecting a
     cipher. See 
-    https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_options.html.</td>
+    https://www.openssl.org/docs/man1.0.2/ssl/SSL_CTX_set_options.html.</td>
   </tr>
   <tr>
     <td><code>SSL_OP_CISCO_ANYCONNECT</code></td>
@@ -1948,7 +1949,7 @@ the `crypto`, `tls`, and `https` modules and are generally specific to OpenSSL.
 [`ecdh.generateKeys()`]: #crypto_ecdh_generatekeys_encoding_format
 [`ecdh.setPrivateKey()`]: #crypto_ecdh_setprivatekey_private_key_encoding
 [`ecdh.setPublicKey()`]: #crypto_ecdh_setpublickey_public_key_encoding
-[`EVP_BytesToKey`]: https://www.openssl.org/docs/crypto/EVP_BytesToKey.html
+[`EVP_BytesToKey`]: https://www.openssl.org/docs/man1.0.2/crypto/EVP_BytesToKey.html
 [`hash.digest()`]: #crypto_hash_digest_encoding
 [`hash.update()`]: #crypto_hash_update_data_input_encoding
 [`hmac.digest()`]: #crypto_hmac_digest_encoding
@@ -1963,8 +1964,8 @@ the `crypto`, `tls`, and `https` modules and are generally specific to OpenSSL.
 [initialization vector]: https://en.wikipedia.org/wiki/Initialization_vector
 [NIST SP 800-131A]: http://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-131Ar1.pdf
 [NIST SP 800-132]: http://csrc.nist.gov/publications/nistpubs/800-132/nist-sp800-132.pdf
-[OpenSSL cipher list format]: https://www.openssl.org/docs/apps/ciphers.html#CIPHER-LIST-FORMAT
-[OpenSSL's SPKAC implementation]: https://www.openssl.org/docs/apps/spkac.html
+[OpenSSL cipher list format]: https://www.openssl.org/docs/man1.0.2/apps/ciphers.html#CIPHER-LIST-FORMAT
+[OpenSSL's SPKAC implementation]: https://www.openssl.org/docs/man1.0.2/apps/spkac.html
 [publicly trusted list of CAs]: https://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt
 [RFC 2412]: https://www.rfc-editor.org/rfc/rfc2412.txt
 [RFC 3526]: https://www.rfc-editor.org/rfc/rfc3526.txt

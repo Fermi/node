@@ -63,6 +63,7 @@ if /i "%1"=="test-simple"   set test_args=%test_args% sequential parallel -J&got
 if /i "%1"=="test-message"  set test_args=%test_args% message&goto arg-ok
 if /i "%1"=="test-gc"       set test_args=%test_args% gc&set buildnodeweak=1&goto arg-ok
 if /i "%1"=="test-inspector" set test_args=%test_args% inspector&goto arg-ok
+if /i "%1"=="test-tick-processor" set test_args=%test_args% tick-processor&goto arg-ok
 if /i "%1"=="test-internet" set test_args=%test_args% internet&goto arg-ok
 if /i "%1"=="test-pummel"   set test_args=%test_args% pummel&goto arg-ok
 if /i "%1"=="test-all"      set test_args=%test_args% sequential parallel message gc inspector internet pummel&set buildnodeweak=1&set jslint=1&goto arg-ok
@@ -191,7 +192,7 @@ if "%target%" == "Clean" goto exit
 @rem Skip signing if the `nosign` option was specified.
 if defined nosign goto licensertf
 
-signtool sign /a /d "Node.js" /du "https://nodejs.org" /t http://timestamp.globalsign.com/scripts/timestamp.dll Release\node.exe
+call tools\sign.bat Release\node.exe
 if errorlevel 1 echo Failed to sign exe&goto exit
 
 :licensertf
@@ -269,7 +270,7 @@ msbuild "%~dp0tools\msvs\msi\nodemsi.sln" /m /t:Clean,Build /p:PlatformToolset=%
 if errorlevel 1 goto exit
 
 if defined nosign goto upload
-signtool sign /a /d "Node.js" /du "https://nodejs.org" /t http://timestamp.globalsign.com/scripts/timestamp.dll node-v%FULLVERSION%-%target_arch%.msi
+call tools\sign.bat node-v%FULLVERSION%-%target_arch%.msi
 if errorlevel 1 echo Failed to sign msi&goto exit
 
 :upload

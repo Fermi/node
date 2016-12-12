@@ -122,6 +122,17 @@ Various tests that are run sequentially.
 
 Test configuration utility used by various test suites.
 
+### tick-processor
+
+Tests for the V8 tick processor integration. The tests are for the logic in
+`lib/internal/v8_prof_processor.js` and `lib/internal/v8_prof_polyfill.js`. The
+tests confirm that the profile processor packages the correct set of scripts
+from V8 and introduces the correct platform specific logic.
+
+| Runs on CI |
+|:----------:|
+| No         |
+
 ### timers
 
 Tests for [timing utilities](https://nodejs.org/api/timers.html) (`setTimeout`
@@ -270,11 +281,6 @@ Platform check for Windows 32-bit on Windows 64-bit.
 * return [&lt;Array>](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array)
 
 Checks whether any globals are not on the `knownGlobals` list.
-
-### libDir
-* return [&lt;String>](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type)
-
-Path to the 'lib' directory.
 
 ### localhostIPv4
 * return [&lt;String>](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures#String_type)

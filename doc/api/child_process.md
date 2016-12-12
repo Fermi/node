@@ -144,7 +144,7 @@ added: v0.1.90
   * `error` {Error}
   * `stdout` {String|Buffer}
   * `stderr` {String|Buffer}
-* Return: {ChildProcess}
+* Returns: {ChildProcess}
 
 Spawns a shell then executes the `command` within that shell, buffering any
 generated output.
@@ -217,7 +217,7 @@ added: v0.1.91
   * `error` {Error}
   * `stdout` {String|Buffer}
   * `stderr` {String|Buffer}
-* Return: {ChildProcess}
+* Returns: {ChildProcess}
 
 The `child_process.execFile()` function is similar to [`child_process.exec()`][]
 except that it does not spawn a shell. Rather, the specified executable `file`
@@ -267,7 +267,7 @@ added: v0.5.0
     be thrown. For instance `[0, 1, 2, 'ipc']`.
   * `uid` {Number} Sets the user identity of the process. (See setuid(2).)
   * `gid` {Number} Sets the group identity of the process. (See setgid(2).)
-* Return: {ChildProcess}
+* Returns: {ChildProcess}
 
 The `child_process.fork()` method is a special case of
 [`child_process.spawn()`][] used specifically to spawn new Node.js processes.
@@ -776,6 +776,16 @@ added: v0.5.9
 The `'message'` event is triggered when a child process uses [`process.send()`][]
 to send messages.
 
+### child.channel
+<!-- YAML
+added: v7.1.0
+-->
+
+* {Object} A pipe representing the IPC channel to the child process.
+
+The `child.channel` property is a reference to the child's IPC channel. If no
+IPC channel currently exists, this property is `undefined`.
+
 ### child.connected
 <!-- YAML
 added: v0.7.2
@@ -891,7 +901,7 @@ added: v0.5.9
 * `sendHandle` {Handle}
 * `options` {Object}
 * `callback` {Function}
-* Return: {Boolean}
+* Returns: {Boolean}
 
 When an IPC channel has been established between the parent and child (
 i.e. when using [`child_process.fork()`][]), the `child.send()` method can be
@@ -1046,7 +1056,7 @@ this occurs.
 added: v0.1.90
 -->
 
-* {Stream.Readable}
+* {stream.Readable}
 
 A `Readable Stream` that represents the child process's `stderr`.
 
@@ -1061,7 +1071,7 @@ the same value.
 added: v0.1.90
 -->
 
-* {Stream.Writable}
+* {stream.Writable}
 
 A `Writable Stream` that represents the child process's `stdin`.
 
@@ -1119,7 +1129,7 @@ assert.equal(child.stdio[2], child.stderr);
 added: v0.1.90
 -->
 
-* {Stream.Readable}
+* {stream.Readable}
 
 A `Readable Stream` that represents the child process's `stdout`.
 
@@ -1145,6 +1155,7 @@ console.log('中文测试');
 [`'error'`]: #child_process_event_error
 [`'exit'`]: #child_process_event_exit
 [`'message'`]: #child_process_event_message
+[`child.channel`]: #child_process_child_channel
 [`child.connected`]: #child_process_child_connected
 [`child.disconnect()`]: #child_process_child_disconnect
 [`child.kill()`]: #child_process_child_kill_signal

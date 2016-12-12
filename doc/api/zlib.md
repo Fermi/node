@@ -113,7 +113,7 @@ http.createServer((request, response) => {
 }).listen(1337);
 ```
 
-By default, the `zlib` methods with throw an error when decompressing
+By default, the `zlib` methods will throw an error when decompressing
 truncated data. However, if it is known that the data is incomplete, or
 the desire is to inspect only the beginning of a compressed file, it is
 possible to suppress the default error handling by changing the flushing
@@ -384,12 +384,12 @@ Only applicable to deflate algorithm.
 added: v0.7.0
 -->
 
+Reset the compressor/decompressor to factory defaults. Only applicable to
+the inflate and deflate algorithms.
+
 ## zlib.constants
 
 Provides an object enumerating Zlib-related constants.
-
-Reset the compressor/decompressor to factory defaults. Only applicable to
-the inflate and deflate algorithms.
 
 ## zlib.createDeflate([options])
 <!-- YAML
