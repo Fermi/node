@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 'use strict';
 const common = require('../common');
 const assert = require('assert');
@@ -67,25 +88,21 @@ const unixSpecialCaseFormatTests = [
   [{}, '']
 ];
 
+const expectedMessage = common.expectsError({
+  code: 'ERR_INVALID_ARG_TYPE',
+  type: TypeError
+}, 18);
+
 const errors = [
-  {method: 'parse', input: [null],
-   message: /Path must be a string. Received null/},
-  {method: 'parse', input: [{}],
-   message: /Path must be a string. Received {}/},
-  {method: 'parse', input: [true],
-   message: /Path must be a string. Received true/},
-  {method: 'parse', input: [1],
-   message: /Path must be a string. Received 1/},
-  {method: 'parse', input: [],
-   message: /Path must be a string. Received undefined/},
-  {method: 'format', input: [null],
-   message: /Parameter "pathObject" must be an object, not/},
-  {method: 'format', input: [''],
-   message: /Parameter "pathObject" must be an object, not string/},
-  {method: 'format', input: [true],
-   message: /Parameter "pathObject" must be an object, not boolean/},
-  {method: 'format', input: [1],
-   message: /Parameter "pathObject" must be an object, not number/},
+  {method: 'parse', input: [null], message: expectedMessage},
+  {method: 'parse', input: [{}], message: expectedMessage},
+  {method: 'parse', input: [true], message: expectedMessage},
+  {method: 'parse', input: [1], message: expectedMessage},
+  {method: 'parse', input: [], message: expectedMessage},
+  {method: 'format', input: [null], message: expectedMessage},
+  {method: 'format', input: [''], message: expectedMessage},
+  {method: 'format', input: [true], message: expectedMessage},
+  {method: 'format', input: [1], message: expectedMessage},
 ];
 
 checkParseFormat(path.win32, winPaths);
@@ -132,50 +149,37 @@ trailingTests.forEach(function(test) {
   test[1].forEach(function(test) {
     const actual = parse(test[0]);
     const expected = test[1];
-    const fn = `path.${os}.parse(`;
-    const message = fn +
-                    JSON.stringify(test[0]) +
-                    ')' +
-                    '\n  expect=' + JSON.stringify(expected) +
-                    '\n  actual=' + JSON.stringify(actual);
+    const message = `path.${os}.parse(${JSON.stringify(test[0])})\n  expect=${
+      JSON.stringify(expected)}\n  actual=${JSON.stringify(actual)}`;
     const actualKeys = Object.keys(actual);
     const expectedKeys = Object.keys(expected);
     let failed = (actualKeys.length !== expectedKeys.length);
     if (!failed) {
       for (let i = 0; i < actualKeys.length; ++i) {
         const key = actualKeys[i];
-        if (expectedKeys.indexOf(key) === -1 || actual[key] !== expected[key]) {
+        if (!expectedKeys.includes(key) || actual[key] !== expected[key]) {
           failed = true;
           break;
         }
       }
     }
     if (failed)
-      failures.push('\n' + message);
+      failures.push(`\n${message}`);
   });
 });
-assert.equal(failures.length, 0, failures.join(''));
+assert.strictEqual(failures.length, 0, failures.join(''));
 
 function checkErrors(path) {
   errors.forEach(function(errorCase) {
-    try {
+    assert.throws(() => {
       path[errorCase.method].apply(path, errorCase.input);
-    } catch (err) {
-      assert.ok(err instanceof TypeError);
-      assert.ok(
-        errorCase.message.test(err.message),
-        'expected ' + errorCase.message + ' to match ' + err.message
-      );
-      return;
-    }
-
-    common.fail('should have thrown');
+    }, errorCase.message);
   });
 }
 
 function checkParseFormat(path, paths) {
   paths.forEach(function(element) {
-    var output = path.parse(element);
+    const output = path.parse(element);
     assert.strictEqual(typeof output.root, 'string');
     assert.strictEqual(typeof output.dir, 'string');
     assert.strictEqual(typeof output.base, 'string');
@@ -202,5 +206,20 @@ function checkSpecialCaseParseFormat(path, testCases) {
 function checkFormat(path, testCases) {
   testCases.forEach(function(testCase) {
     assert.strictEqual(path.format(testCase[0]), testCase[1]);
+  });
+
+  function typeName(value) {
+    return value === null ? 'null' : typeof value;
+  }
+
+  [null, undefined, 1, true, false, 'string'].forEach((pathObject) => {
+    assert.throws(() => {
+      path.format(pathObject);
+    }, common.expectsError({
+      code: 'ERR_INVALID_ARG_TYPE',
+      type: TypeError,
+      message: 'The "pathObject" argument must be of type Object. Received ' +
+               'type ' + typeName(pathObject)
+    }));
   });
 }

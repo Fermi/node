@@ -49,11 +49,12 @@ TEST_DIR = os.path.join(BASE_DIR, "test")
 
 
 class Instructions(object):
-  def __init__(self, command, test_id, timeout, verbose):
+  def __init__(self, command, test_id, timeout, verbose, env):
     self.command = command
     self.id = test_id
     self.timeout = timeout
     self.verbose = verbose
+    self.env = env
 
 
 # Structure that keeps global information per worker process.
@@ -111,7 +112,7 @@ def _GetInstructions(test, context):
   # the like.
   if statusfile.IsSlow(test.outcomes or [statusfile.PASS]):
     timeout *= 2
-  return Instructions(command, test.id, timeout, context.verbose)
+  return Instructions(command, test.id, timeout, context.verbose, test.env)
 
 
 class Job(object):
@@ -149,8 +150,9 @@ class TestJob(Job):
 
     Rename files with PIDs to files with unique test IDs, because the number
     of tests might be higher than pid_max. E.g.:
-    d8.1234.sancov -> d8.test.1.sancov, where 1234 was the process' PID
-    and 1 is the test ID.
+    d8.1234.sancov -> d8.test.42.1.sancov, where 1234 was the process' PID,
+    42 is the test ID and 1 is the attempt (the same test might be rerun on
+    failures).
     """
     if context.sancov_dir and output.pid is not None:
       sancov_file = os.path.join(
@@ -160,7 +162,10 @@ class TestJob(Job):
       if os.path.exists(sancov_file):
         parts = sancov_file.split(".")
         new_sancov_file = ".".join(
-            parts[:-2] + ["test", str(self.test.id)] + parts[-1:])
+            parts[:-2] +
+            ["test", str(self.test.id), str(self.test.run)] +
+            parts[-1:]
+        )
         assert not os.path.exists(new_sancov_file)
         os.rename(sancov_file, new_sancov_file)
 
@@ -174,7 +179,8 @@ class TestJob(Job):
       return SetupProblem(e, self.test)
 
     start_time = time.time()
-    output = commands.Execute(instr.command, instr.verbose, instr.timeout)
+    output = commands.Execute(instr.command, instr.verbose, instr.timeout,
+                              instr.env)
     self._rename_coverage_data(output, process_context.context)
     return (instr.id, output, time.time() - start_time)
 
@@ -193,12 +199,17 @@ class Runner(object):
     self.perf_failures = False
     self.printed_allocations = False
     self.tests = [ t for s in suites for t in s.tests ]
+
+    # Always pre-sort by status file, slowest tests first.
+    slow_key = lambda t: statusfile.IsSlow(t.outcomes)
+    self.tests.sort(key=slow_key, reverse=True)
+
+    # Sort by stored duration of not opted out.
     if not context.no_sorting:
       for t in self.tests:
         t.duration = self.perfdata.FetchPerfData(t) or 1.0
-      slow_key = lambda t: statusfile.IsSlow(t.outcomes)
-      self.tests.sort(key=slow_key, reverse=True)
       self.tests.sort(key=lambda t: t.duration, reverse=True)
+
     self._CommonInit(suites, progress_indicator, context)
 
   def _CommonInit(self, suites, progress_indicator, context):

@@ -11,13 +11,15 @@ const util = require('util');
 common.refreshTmpDir();
 
 const linkTarget = path.join(common.fixturesDir,
-  '/module-require-symlink/node_modules/dep2/');
+                             '/module-require-symlink/node_modules/dep2/');
 
-const linkDir = path.join(common.fixturesDir,
-  '/module-require-symlink/node_modules/dep1/node_modules/dep2');
+const linkDir = path.join(
+  common.fixturesDir,
+  '/module-require-symlink/node_modules/dep1/node_modules/dep2'
+);
 
 const linkScriptTarget = path.join(common.fixturesDir,
-  '/module-require-symlink/symlinked.js');
+                                   '/module-require-symlink/symlinked.js');
 
 const linkScript = path.join(common.tmpDir, 'module-require-symlink.js');
 
@@ -25,12 +27,10 @@ if (common.isWindows) {
   // On Windows, creating symlinks requires admin privileges.
   // We'll only try to run symlink test if we have enough privileges.
   exec('whoami /priv', function(err, o) {
-    if (err || !o.includes('SeCreateSymbolicLinkPrivilege')) {
+    if (err || !o.includes('SeCreateSymbolicLinkPrivilege'))
       common.skip('insufficient privileges');
-      return;
-    } else {
-      test();
-    }
+
+    test();
   });
 } else {
   test();

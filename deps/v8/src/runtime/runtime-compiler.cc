@@ -41,19 +41,6 @@ RUNTIME_FUNCTION(Runtime_CompileLazy) {
   return function->code();
 }
 
-RUNTIME_FUNCTION(Runtime_CompileBaseline) {
-  HandleScope scope(isolate);
-  DCHECK_EQ(1, args.length());
-  CONVERT_ARG_HANDLE_CHECKED(JSFunction, function, 0);
-  StackLimitCheck check(isolate);
-  if (check.JsHasOverflowed(1 * KB)) return isolate->StackOverflow();
-  if (!Compiler::CompileBaseline(function)) {
-    return isolate->heap()->exception();
-  }
-  DCHECK(function->is_compiled());
-  return function->code();
-}
-
 RUNTIME_FUNCTION(Runtime_CompileOptimized_Concurrent) {
   HandleScope scope(isolate);
   DCHECK_EQ(1, args.length());
@@ -92,11 +79,11 @@ RUNTIME_FUNCTION(Runtime_InstantiateAsmJs) {
   }
   Handle<JSObject> foreign;
   if (args[2]->IsJSObject()) {
-    foreign = args.at<i::JSObject>(2);
+    foreign = args.at<JSObject>(2);
   }
   Handle<JSArrayBuffer> memory;
   if (args[3]->IsJSArrayBuffer()) {
-    memory = args.at<i::JSArrayBuffer>(3);
+    memory = args.at<JSArrayBuffer>(3);
   }
   if (function->shared()->HasAsmWasmData() &&
       AsmJs::IsStdlibValid(isolate, handle(function->shared()->asm_wasm_data()),
@@ -122,12 +109,12 @@ RUNTIME_FUNCTION(Runtime_InstantiateAsmJs) {
     function->shared()->ReplaceCode(
         isolate->builtins()->builtin(Builtins::kCompileLazy));
   }
-  return Smi::FromInt(0);
+  return Smi::kZero;
 }
 
 RUNTIME_FUNCTION(Runtime_NotifyStubFailure) {
   HandleScope scope(isolate);
-  DCHECK(args.length() == 0);
+  DCHECK_EQ(0, args.length());
   Deoptimizer* deoptimizer = Deoptimizer::Grab(isolate);
   DCHECK(AllowHeapAllocation::IsAllowed());
   delete deoptimizer;
@@ -158,7 +145,7 @@ class ActivationsFinder : public ThreadVisitor {
 
 RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
   HandleScope scope(isolate);
-  DCHECK(args.length() == 1);
+  DCHECK_EQ(1, args.length());
   CONVERT_SMI_ARG_CHECKED(type_arg, 0);
   Deoptimizer::BailoutType type =
       static_cast<Deoptimizer::BailoutType>(type_arg);
@@ -172,6 +159,21 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
 
   DCHECK(optimized_code->kind() == Code::OPTIMIZED_FUNCTION);
   DCHECK(type == deoptimizer->bailout_type());
+  DCHECK_NULL(isolate->context());
+
+  // TODO(turbofan): For Crankshaft we restore the context before objects are
+  // being materialized, because it never de-materializes the context but it
+  // requires a context to materialize arguments objects. This is specific to
+  // Crankshaft and can be removed once only TurboFan goes through here.
+  if (!optimized_code->is_turbofanned()) {
+    JavaScriptFrameIterator top_it(isolate);
+    JavaScriptFrame* top_frame = top_it.frame();
+    isolate->set_context(Context::cast(top_frame->context()));
+  } else {
+    // TODO(turbofan): We currently need the native context to materialize
+    // the arguments object, but only to get to its map.
+    isolate->set_context(function->native_context());
+  }
 
   // Make sure to materialize objects before causing any allocation.
   JavaScriptFrameIterator it(isolate);
@@ -179,9 +181,11 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
   delete deoptimizer;
 
   // Ensure the context register is updated for materialized objects.
-  JavaScriptFrameIterator top_it(isolate);
-  JavaScriptFrame* top_frame = top_it.frame();
-  isolate->set_context(Context::cast(top_frame->context()));
+  if (optimized_code->is_turbofanned()) {
+    JavaScriptFrameIterator top_it(isolate);
+    JavaScriptFrame* top_frame = top_it.frame();
+    isolate->set_context(Context::cast(top_frame->context()));
+  }
 
   if (type == Deoptimizer::LAZY) {
     return isolate->heap()->undefined_value();
@@ -196,14 +200,9 @@ RUNTIME_FUNCTION(Runtime_NotifyDeoptimized) {
   isolate->thread_manager()->IterateArchivedThreads(&activations_finder);
 
   if (!activations_finder.has_code_activations_) {
-    if (function->code() == *optimized_code) {
-      if (FLAG_trace_deopt) {
-        PrintF("[removing optimized code for: ");
-        function->PrintName();
-        PrintF("]\n");
-      }
-      function->ReplaceCode(function->shared()->code());
-    }
+    Deoptimizer::UnlinkOptimizedCode(*optimized_code,
+                                     function->context()->native_context());
+
     // Evict optimized code for this function from the cache so that it
     // doesn't get used for new closures.
     function->shared()->EvictFromOptimizedCodeMap(*optimized_code,
@@ -256,9 +255,9 @@ BailoutId DetermineEntryAndDisarmOSRForBaseline(JavaScriptFrame* frame) {
   // Revert the patched back edge table, regardless of whether OSR succeeds.
   BackEdgeTable::Revert(frame->isolate(), *caller_code);
 
+  // Return a BailoutId representing an AST id of the {IterationStatement}.
   uint32_t pc_offset =
       static_cast<uint32_t>(frame->pc() - caller_code->instruction_start());
-
   return caller_code->TranslatePcOffsetToAstId(pc_offset);
 }
 
@@ -279,6 +278,7 @@ BailoutId DetermineEntryAndDisarmOSRForInterpreter(JavaScriptFrame* frame) {
   // Reset the OSR loop nesting depth to disarm back edges.
   bytecode->set_osr_loop_nesting_level(0);
 
+  // Return a BailoutId representing the bytecode offset of the back branch.
   return BailoutId(iframe->GetBytecodeOffset());
 }
 
@@ -286,7 +286,7 @@ BailoutId DetermineEntryAndDisarmOSRForInterpreter(JavaScriptFrame* frame) {
 
 RUNTIME_FUNCTION(Runtime_CompileForOnStackReplacement) {
   HandleScope scope(isolate);
-  DCHECK(args.length() == 1);
+  DCHECK_EQ(1, args.length());
   CONVERT_ARG_HANDLE_CHECKED(JSFunction, function, 0);
 
   // We're not prepared to handle a function with arguments object.
@@ -330,15 +330,20 @@ RUNTIME_FUNCTION(Runtime_CompileForOnStackReplacement) {
         PrintF("[OSR - Entry at AST id %d, offset %d in optimized code]\n",
                ast_id.ToInt(), data->OsrPcOffset()->value());
       }
-      // TODO(titzer): this is a massive hack to make the deopt counts
-      // match. Fix heuristics for reenabling optimizations!
-      function->shared()->increment_deopt_count();
 
       if (result->is_turbofanned()) {
-        // TurboFanned OSR code cannot be installed into the function.
-        // But the function is obviously hot, so optimize it next time.
-        function->ReplaceCode(
-            isolate->builtins()->builtin(Builtins::kCompileOptimized));
+        // When we're waiting for concurrent optimization, set to compile on
+        // the next call - otherwise we'd run unoptimized once more
+        // and potentially compile for OSR another time as well.
+        if (function->IsMarkedForConcurrentOptimization()) {
+          if (FLAG_trace_osr) {
+            PrintF("[OSR - Re-marking ");
+            function->PrintName();
+            PrintF(" for non-concurrent optimization]\n");
+          }
+          function->ReplaceCode(
+              isolate->builtins()->builtin(Builtins::kCompileOptimized));
+        }
       } else {
         // Crankshafted OSR code can be installed into the function.
         function->ReplaceCode(*result);
@@ -363,7 +368,7 @@ RUNTIME_FUNCTION(Runtime_CompileForOnStackReplacement) {
 
 RUNTIME_FUNCTION(Runtime_TryInstallOptimizedCode) {
   HandleScope scope(isolate);
-  DCHECK(args.length() == 1);
+  DCHECK_EQ(1, args.length());
   CONVERT_ARG_HANDLE_CHECKED(JSFunction, function, 0);
 
   // First check if this is a real stack overflow.
@@ -420,9 +425,10 @@ static Object* CompileGlobalEval(Isolate* isolate, Handle<String> source,
   static const ParseRestriction restriction = NO_PARSE_RESTRICTION;
   Handle<JSFunction> compiled;
   ASSIGN_RETURN_ON_EXCEPTION_VALUE(
-      isolate, compiled, Compiler::GetFunctionFromEval(
-                             source, outer_info, context, language_mode,
-                             restriction, eval_scope_position, eval_position),
+      isolate, compiled,
+      Compiler::GetFunctionFromEval(source, outer_info, context, language_mode,
+                                    restriction, kNoSourcePosition,
+                                    eval_scope_position, eval_position),
       isolate->heap()->exception());
   return *compiled;
 }
@@ -430,9 +436,9 @@ static Object* CompileGlobalEval(Isolate* isolate, Handle<String> source,
 
 RUNTIME_FUNCTION(Runtime_ResolvePossiblyDirectEval) {
   HandleScope scope(isolate);
-  DCHECK(args.length() == 6);
+  DCHECK_EQ(6, args.length());
 
-  Handle<Object> callee = args.at<Object>(0);
+  Handle<Object> callee = args.at(0);
 
   // If "eval" didn't refer to the original GlobalEval, it's not a
   // direct call to eval.

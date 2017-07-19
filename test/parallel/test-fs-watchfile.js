@@ -1,22 +1,22 @@
 'use strict';
-
 const common = require('../common');
+
+const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const assert = require('assert');
 
 // Basic usage tests.
 assert.throws(function() {
   fs.watchFile('./some-file');
-}, /"watchFile\(\)" requires a listener function/);
+}, /^Error: "watchFile\(\)" requires a listener function$/);
 
 assert.throws(function() {
   fs.watchFile('./another-file', {}, 'bad listener');
-}, /"watchFile\(\)" requires a listener function/);
+}, /^Error: "watchFile\(\)" requires a listener function$/);
 
 assert.throws(function() {
-  fs.watchFile(new Object(), function() {});
-}, /Path must be a string/);
+  fs.watchFile(new Object(), common.mustNotCall());
+}, common.expectsError({code: 'ERR_INVALID_ARG_TYPE', type: TypeError}));
 
 const enoentFile = path.join(common.tmpDir, 'non-existent-file');
 const expectedStatObject = new fs.Stats(
@@ -40,7 +40,7 @@ common.refreshTmpDir();
 
 // If the file initially didn't exist, and gets created at a later point of
 // time, the callback should be invoked again with proper values in stat object
-var fileExists = false;
+let fileExists = false;
 
 fs.watchFile(enoentFile, {interval: 0}, common.mustCall(function(curr, prev) {
   if (!fileExists) {
@@ -63,3 +63,25 @@ fs.watchFile(enoentFile, {interval: 0}, common.mustCall(function(curr, prev) {
     fs.unwatchFile(enoentFile);
   }
 }, 2));
+
+// Watch events should callback with a filename on supported systems.
+// Omitting AIX. It works but not reliably.
+if (common.isLinux || common.isOSX || common.isWindows) {
+  const dir = common.tmpDir + '/watch';
+
+  fs.mkdir(dir, common.mustCall(function(err) {
+    if (err) assert.fail(err);
+
+    fs.watch(dir, common.mustCall(function(eventType, filename) {
+      clearInterval(interval);
+      this._handle.close();
+      assert.strictEqual(filename, 'foo.txt');
+    }));
+
+    const interval = setInterval(() => {
+      fs.writeFile(`${dir}/foo.txt`, 'foo', common.mustCall(function(err) {
+        if (err) assert.fail(err);
+      }));
+    }, 1);
+  }));
+}

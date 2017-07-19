@@ -2,10 +2,8 @@
 
 const common = require('../common');
 
-if (!common.hasCrypto) {
+if (!common.hasCrypto)
   common.skip('node compiled without crypto.');
-  return;
-}
 
 const assert = require('assert');
 const tls = require('tls');
@@ -28,7 +26,7 @@ const server = tls.createServer({
   );
   c.end();
 })).listen(0, function() {
-  var client = tls.connect({
+  const client = tls.connect({
     port: this.address().port,
     pfx: pfx,
     passphrase: 'sample',

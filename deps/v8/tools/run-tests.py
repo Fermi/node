@@ -34,7 +34,7 @@ import json
 import multiprocessing
 import optparse
 import os
-from os.path import join
+from os.path import getmtime, isdir, join
 import platform
 import random
 import shlex
@@ -55,6 +55,8 @@ from testrunner.objects import context
 # Base dir of the v8 checkout to be used as cwd.
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+DEFAULT_OUT_GN = "out.gn"
+
 ARCH_GUESS = utils.DefaultArch()
 
 # Map of test name synonyms to lists of test suites. Should be ordered by
@@ -63,8 +65,10 @@ ARCH_GUESS = utils.DefaultArch()
 TEST_MAP = {
   # This needs to stay in sync with test/bot_default.isolate.
   "bot_default": [
+    "debugger",
     "mjsunit",
     "cctest",
+    "inspector",
     "webkit",
     "fuzzer",
     "message",
@@ -74,8 +78,10 @@ TEST_MAP = {
   ],
   # This needs to stay in sync with test/default.isolate.
   "default": [
+    "debugger",
     "mjsunit",
     "cctest",
+    "inspector",
     "fuzzer",
     "message",
     "preparser",
@@ -84,8 +90,10 @@ TEST_MAP = {
   ],
   # This needs to stay in sync with test/optimize_for_size.isolate.
   "optimize_for_size": [
+    "debugger",
     "mjsunit",
     "cctest",
+    "inspector",
     "webkit",
     "intl",
   ],
@@ -96,15 +104,18 @@ TEST_MAP = {
 
 TIMEOUT_DEFAULT = 60
 
-VARIANTS = ["default", "turbofan", "ignition_staging"]
+# Variants ordered by expected runtime (slowest first).
+VARIANTS = ["default", "noturbofan"]
 
 MORE_VARIANTS = [
-  "ignition",
   "stress",
-  "turbofan_opt",
+  "noturbofan_stress",
+  "nooptimization",
+  "asm_wasm",
+  "wasm_traps",
 ]
 
-EXHAUSTIVE_VARIANTS = VARIANTS + MORE_VARIANTS
+EXHAUSTIVE_VARIANTS = MORE_VARIANTS + VARIANTS
 
 VARIANT_ALIASES = {
   # The default for developer workstations.
@@ -112,12 +123,12 @@ VARIANT_ALIASES = {
   # Additional variants, run on all bots.
   "more": MORE_VARIANTS,
   # Additional variants, run on a subset of bots.
-  "extra": ["nocrankshaft"],
+  "extra": ["fullcode"],
 }
 
 DEBUG_FLAGS = ["--nohard-abort", "--nodead-code-elimination",
                "--nofold-constants", "--enable-slow-asserts",
-               "--debug-code", "--verify-heap"]
+               "--verify-heap"]
 RELEASE_FLAGS = ["--nohard-abort", "--nodead-code-elimination",
                  "--nofold-constants"]
 
@@ -294,6 +305,8 @@ def BuildOptions():
                     " \"%s\"" % ",".join(EXHAUSTIVE_VARIANTS))
   result.add_option("--outdir", help="Base directory with compile output",
                     default="out")
+  result.add_option("--gn", help="Scan out.gn for the last built configuration",
+                    default=False, action="store_true")
   result.add_option("--predictable",
                     help="Compare output of several reruns of each test",
                     default=False, action="store_true")
@@ -307,6 +320,8 @@ def BuildOptions():
                     default=False, action="store_true")
   result.add_option("--json-test-results",
                     help="Path to a file for storing json results.")
+  result.add_option("--flakiness-results",
+                    help="Path to a file for storing flakiness json.")
   result.add_option("--rerun-failures-count",
                     help=("Number of times to rerun each failing test case. "
                           "Very slow tests will be rerun only once."),
@@ -388,7 +403,15 @@ def SetupEnvironment(options):
   )
 
   if options.asan:
-    os.environ['ASAN_OPTIONS'] = symbolizer
+    asan_options = [symbolizer, "allow_user_segv_handler=1"]
+    if not utils.GuessOS() == 'macos':
+      # LSAN is not available on mac.
+      asan_options.append('detect_leaks=1')
+      os.environ['LSAN_OPTIONS'] = ":".join([
+        'suppressions=%s' % os.path.join(
+            BASE_DIR, 'tools', 'memory', 'lsan', 'suppressions.txt'),
+      ])
+    os.environ['ASAN_OPTIONS'] = ":".join(asan_options)
 
   if options.sancov_dir:
     assert os.path.exists(options.sancov_dir)
@@ -427,8 +450,28 @@ def ProcessOptions(options):
   # First try to auto-detect configurations based on the build if GN was
   # used. This can't be overridden by cmd-line arguments.
   options.auto_detect = False
-  build_config_path = os.path.join(
-      BASE_DIR, options.outdir, "v8_build_config.json")
+  if options.gn:
+    gn_out_dir = os.path.join(BASE_DIR, DEFAULT_OUT_GN)
+    latest_timestamp = -1
+    latest_config = None
+    for gn_config in os.listdir(gn_out_dir):
+      gn_config_dir = os.path.join(gn_out_dir, gn_config)
+      if not isdir(gn_config_dir):
+        continue
+      if os.path.getmtime(gn_config_dir) > latest_timestamp:
+        latest_timestamp = os.path.getmtime(gn_config_dir)
+        latest_config = gn_config
+    if latest_config:
+      print(">>> Latest GN build found is %s" % latest_config)
+      options.outdir = os.path.join(DEFAULT_OUT_GN, latest_config)
+
+  if options.buildbot:
+    build_config_path = os.path.join(
+        BASE_DIR, options.outdir, options.mode, "v8_build_config.json")
+  else:
+    build_config_path = os.path.join(
+        BASE_DIR, options.outdir, "v8_build_config.json")
+
   if os.path.exists(build_config_path):
     try:
       with open(build_config_path) as f:
@@ -438,6 +481,10 @@ def ProcessOptions(options):
              build_config_path)
       return False
     options.auto_detect = True
+
+    # In auto-detect mode the outdir is always where we found the build config.
+    # This ensures that we'll also take the build products from there.
+    options.outdir = os.path.dirname(build_config_path)
 
     options.arch_and_mode = None
     options.arch = build_config["v8_target_cpu"]
@@ -682,15 +729,15 @@ def Execute(arch, mode, args, options, suites):
 
   shell_dir = options.shell_dir
   if not shell_dir:
-    if options.buildbot:
+    if options.auto_detect:
+      # If an output dir with a build was passed, test directly in that
+      # directory.
+      shell_dir = os.path.join(BASE_DIR, options.outdir)
+    elif options.buildbot:
       # TODO(machenbach): Get rid of different output folder location on
       # buildbot. Currently this is capitalized Release and Debug.
       shell_dir = os.path.join(BASE_DIR, options.outdir, mode)
       mode = BuildbotToV8Mode(mode)
-    elif options.auto_detect:
-      # If an output dir with a build was passed, test directly in that
-      # directory.
-      shell_dir = os.path.join(BASE_DIR, options.outdir)
     else:
       shell_dir = os.path.join(
           BASE_DIR,
@@ -713,14 +760,8 @@ def Execute(arch, mode, args, options, suites):
     # Predictable mode is slower.
     options.timeout *= 2
 
-  # TODO(machenbach): Remove temporary verbose output on windows after
-  # debugging driver-hung-up on XP.
-  verbose_output = (
-      options.verbose or
-      utils.IsWindows() and options.progress == "verbose"
-  )
   ctx = context.Context(arch, MODES[mode]["execution_mode"], shell_dir,
-                        mode_flags, verbose_output,
+                        mode_flags, options.verbose,
                         options.timeout,
                         options.isolates,
                         options.command_prefix,
@@ -828,10 +869,13 @@ def Execute(arch, mode, args, options, suites):
     progress_indicator.Register(progress.JsonTestProgressIndicator(
         options.json_test_results, arch, MODES[mode]["execution_mode"],
         ctx.random_seed))
+  if options.flakiness_results:
+    progress_indicator.Register(progress.FlakinessTestProgressIndicator(
+        options.flakiness_results))
 
   run_networked = not options.no_network
   if not run_networked:
-    if verbose_output:
+    if options.verbose:
       print("Network distribution disabled, running tests locally.")
   elif utils.GuessOS() != "linux":
     print("Network distribution is only supported on Linux, sorry!")
