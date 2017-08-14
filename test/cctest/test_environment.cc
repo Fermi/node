@@ -41,9 +41,9 @@ class EnvironmentTest : public NodeTestFixture {
     }
 
     ~Env() {
-      FreeIsolateData(isolate_data_);
       environment_->CleanupHandles();
       FreeEnvironment(environment_);
+      FreeIsolateData(isolate_data_);
     }
 
     Environment* operator*() const {
@@ -85,7 +85,6 @@ TEST_F(EnvironmentTest, AtExitWithArgument) {
   EXPECT_EQ(arg, cb_1_arg);
 }
 
-/*
 TEST_F(EnvironmentTest, MultipleEnvironmentsPerIsolate) {
   const v8::HandleScope handle_scope(isolate_);
   const Argv argv;
@@ -101,7 +100,6 @@ TEST_F(EnvironmentTest, MultipleEnvironmentsPerIsolate) {
   RunAtExit(*env2);
   EXPECT_TRUE(called_cb_2);
 }
-*/
 
 static void at_exit_callback1(void* arg) {
   called_cb_1 = true;
